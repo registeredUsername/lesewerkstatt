@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Lesewerkstatt — Lecture allemande assistée</title>
+  <meta name="description" content="Atelier de lecture allemande : ajoutez une source, obtenez un glossaire automatique, touchez un mot pour sa traduction.">
+  <meta name="theme-color" content="#D8232A">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect x='10' y='5' width='16' height='90' rx='2' fill='%23D8232A'/><text x='55' y='68' font-size='52' font-family='serif'>📖</text></svg>">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="bar">
+      <div class="mark"></div>
+      <div class="brand"><b>Lesewerkstatt</b><span>Lecture allemande assistée</span></div>
+      <div class="spacer"></div>
+      <button class="iconbtn" id="openWords">Mes mots <span class="cnt" id="wcount">0</span></button>
+    </div>
+    <nav class="tabs" id="tabs">
+      <button data-tab="lib" aria-selected="true">Bibliothèque</button>
+      <button data-tab="add" aria-selected="false">Ajouter</button>
+    </nav>
+  </header>
+
+  <main id="main"></main>
+</div>
+
+<!-- bottom sheet -->
+<div class="backdrop" id="backdrop"></div>
+<div class="sheet" id="sheet" role="dialog" aria-label="Traduction du mot">
+  <div class="grip"></div>
+  <div id="sheetBody"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

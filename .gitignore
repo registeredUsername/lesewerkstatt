@@ -1,0 +1,13 @@
+# Lesewerkstatt
+
+data/
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+*.db
+lesewerkstatt.html
