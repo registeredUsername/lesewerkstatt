@@ -3,7 +3,7 @@
    Cache app shell + network-first for source data (offline reading).
    ═══════════════════════════════════════════════════════════════════════ */
 
-const CACHE_NAME = 'lesewerkstatt-v1';
+const CACHE_NAME = 'lesewerkstatt-v4';
 const APP_SHELL = [
   '/',
   '/static/styles.css',

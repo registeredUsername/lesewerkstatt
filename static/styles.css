@@ -47,8 +47,8 @@
     --hair: #2A2A34;
     --hair-strong: #3A3A46;
     --red: #E8444B;
-    --red-wash: rgba(232, 68, 75, 0.12);
-    --red-glow: rgba(232, 68, 75, 0.15);
+    --red-wash: rgba(232, 68, 75, 0.35);
+    --red-glow: rgba(232, 68, 75, 0.45);
     --ok: #34C77B;
     --ok-wash: rgba(52, 199, 123, 0.12);
     --shadow-sm: 0 1px 3px rgba(0,0,0,0.2);
@@ -409,7 +409,7 @@ textarea.form-input {
 
 .mode-tabs button.active {
   background: var(--ink);
-  color: #fff;
+  color: var(--surface);
 }
 
 .mode-tabs button:not(.active):hover {
@@ -423,7 +423,7 @@ textarea.form-input {
   border: none;
   border-radius: 12px;
   background: var(--ink);
-  color: #fff;
+  color: var(--surface);
   font-family: var(--sans);
   font-weight: 700;
   font-size: 0.95rem;
@@ -570,7 +570,7 @@ textarea.form-input {
 
 .seg button[aria-pressed="true"] {
   background: var(--ink);
-  color: #fff;
+  color: var(--surface);
 }
 
 .src {
@@ -615,7 +615,7 @@ textarea.form-input {
 /* Tappable word */
 .tw {
   cursor: pointer;
-  border-bottom: 1.5px dotted var(--hair-strong);
+  border-bottom: 1.5px dotted var(--slate);
   padding-bottom: 1px;
   transition: background 0.12s, border-color 0.12s;
   border-radius: 2px;
@@ -841,7 +841,7 @@ textarea.form-input {
 
 .wc-actions .keep {
   background: var(--ink);
-  color: #fff;
+  color: var(--surface);
   border-color: var(--ink);
 }
 
@@ -932,7 +932,7 @@ textarea.form-input {
 
 .toolbar .exp {
   background: var(--ink);
-  color: #fff;
+  color: var(--surface);
   border-color: var(--ink);
 }
 
@@ -948,7 +948,7 @@ textarea.form-input {
   bottom: 5.2rem;
   transform: translateX(-50%) translateY(10px);
   background: var(--ink);
-  color: #fff;
+  color: var(--surface);
   font-size: 0.8rem;
   font-weight: 600;
   padding: 0.55rem 0.9rem;

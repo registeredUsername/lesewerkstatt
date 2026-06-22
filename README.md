@@ -11,7 +11,7 @@ et l'affiche dans un lecteur où l'on **touche un mot pour voir sa traduction**.
 - **Backend** : FastAPI + SQLite (Python 3.12)
 - **Frontend** : HTML/CSS/JS vanilla (PWA)
 - **LLM** : Infomaniak AI Tools (compatible OpenAI), modèle Gemma 31B
-- **Déploiement** : Docker, derrière Nginx + Basic Auth
+- **Déploiement** : Docker, derrière Nginx
 
 ## Développement local
 
@@ -44,12 +44,11 @@ docker run -d --name lesewerkstatt --restart unless-stopped \
 2. Cloner le dépôt, remplir `.env`
 3. `docker build` + `docker run` (port loopback libre, volume `data/`)
 4. `curl http://127.0.0.1:8042/healthz` → `{"ok":true}`
-5. `htpasswd -c /etc/nginx/.htpasswd-lese admin`
-6. Copier `deploy/lese.example.com.nginx` → `/etc/nginx/sites-available/`
-7. `ln -s … sites-enabled/`, `nginx -t`, `systemctl reload nginx`
-8. `certbot --nginx -d lese.example.com`
-9. Tester : URL admin.ch, PDF DigiSanté, collage NZZ
-10. Installer la PWA sur Android
+5. Copier `deploy/lese.example.com.nginx` → `/etc/nginx/sites-available/`
+6. `ln -s … sites-enabled/`, `nginx -t`, `systemctl reload nginx`
+7. `certbot --nginx -d lese.example.com`
+8. Tester : URL admin.ch, PDF DigiSanté, collage NZZ
+9. Installer la PWA sur Android
 
 ## API
 

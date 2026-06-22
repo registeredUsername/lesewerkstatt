@@ -10,8 +10,7 @@ server {
 
     # certbot remplira ssl_certificate / ssl_certificate_key
 
-    auth_basic           "Lesewerkstatt";
-    auth_basic_user_file /etc/nginx/.htpasswd-lese;
+
 
     client_max_body_size 25m;          # uploads PDF
 

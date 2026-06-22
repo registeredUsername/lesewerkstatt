@@ -237,9 +237,16 @@ def manifest():
 
 @app.get("/sw.js")
 def service_worker():
-    return FileResponse(STATIC_DIR / "sw.js", media_type="application/javascript")
+    return FileResponse(
+        STATIC_DIR / "sw.js",
+        media_type="application/javascript",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
 
 
 @app.get("/")
 def index():
-    return FileResponse(STATIC_DIR / "index.html")
+    return FileResponse(
+        STATIC_DIR / "index.html",
+        headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+    )
