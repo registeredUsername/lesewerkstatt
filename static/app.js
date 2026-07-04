@@ -52,8 +52,10 @@ let savedWords = {};   // from API { surface: { display, fr, lemma, source_id } 
 let activeGloss = {};  // glossary of current text: surfaceLower -> entry
 let activeTab = 'lib';
 let readMode = 'tap';  // 'tap' | 'inl'
-let addMode = 'url';   // 'url' | 'paste' | 'pdf'
+let addMode = 'url';   // 'url' | 'paste' | 'pdf' | 'anki'
 let currentSourceId = null;
+let ankiDirection = 'de';
+let ankiPreview = null;
 
 const main = document.getElementById('main');
 const sheet = document.getElementById('sheet');
@@ -322,6 +324,7 @@ async function toggleSave(surf, e) {
         fr: e.fr,
         lemma: e.lemma || null,
         source_id: currentSourceId,
+        note: e.note || null,
       });
       savedWords[sl] = { display: surf, fr: e.fr, lemma: e.lemma || '' };
       if (sheetWordEl) sheetWordEl.classList.add('saved');
@@ -346,7 +349,7 @@ async function openWords() {
     const words = await API.get('/api/words');
     savedWords = {};
     words.forEach(w => {
-      savedWords[w.surface] = { display: w.display, fr: w.fr, lemma: w.lemma || '' };
+      savedWords[w.surface] = { display: w.display, fr: w.fr, lemma: w.lemma || '', note: w.note || '' };
     });
     updateCount();
   } catch (e) { /* use cached */ }
@@ -417,6 +420,7 @@ function renderAdd() {
       <button class="${addMode === 'url' ? 'active' : ''}" data-mode="url">🔗 URL</button>
       <button class="${addMode === 'paste' ? 'active' : ''}" data-mode="paste">📋 Texte</button>
       <button class="${addMode === 'pdf' ? 'active' : ''}" data-mode="pdf">📄 PDF</button>
+      <button class="${addMode === 'anki' ? 'active' : ''}" data-mode="anki">🧠 Entrée Anki</button>
     </div>
 
     <div id="addForm"></div>
@@ -546,6 +550,104 @@ function renderAddForm() {
     });
 
     submitBtn.addEventListener('click', submitPdf);
+  } else if (addMode === 'anki') {
+    if (!ankiPreview) {
+      // ── Input form ──
+      form.innerHTML = `
+        <div class="anki-direction">
+          <div class="seg" role="group" aria-label="Direction">
+            <button id="ankiDe" aria-pressed="${ankiDirection === 'de'}">🇩🇪 Allemand</button>
+            <button id="ankiFr" aria-pressed="${ankiDirection === 'fr'}">🇫🇷 Français</button>
+          </div>
+        </div>
+        <div class="form-section">
+          <label class="form-label" for="ankiWord">${ankiDirection === 'de' ? 'Mot allemand' : 'Mot français'}</label>
+          <input class="form-input" id="ankiWord" type="text" placeholder="${ankiDirection === 'de' ? 'z.B. abstimmen, Krankenkasse…' : 'ex. assurance maladie, voter…'}">
+        </div>
+        <button class="primary" id="ankiGenerate">Générer la fiche</button>
+        <p class="hint">L'IA trouvera la forme de dictionnaire, la traduction et la décomposition morphologique (~5 s).</p>`;
+
+      document.getElementById('ankiDe').addEventListener('click', () => {
+        ankiDirection = 'de';
+        renderAddForm();
+      });
+      document.getElementById('ankiFr').addEventListener('click', () => {
+        ankiDirection = 'fr';
+        renderAddForm();
+      });
+      document.getElementById('ankiGenerate').addEventListener('click', submitAnkiGenerate);
+
+      // Enter key submits
+      document.getElementById('ankiWord').addEventListener('keydown', e => {
+        if (e.key === 'Enter') submitAnkiGenerate();
+      });
+    } else {
+      // ── Editable preview ──
+      const p = ankiPreview;
+      let decompHTML = '';
+      if (p.decomposition && p.decomposition.length) {
+        decompHTML = p.decomposition.map((d, i) =>
+          `<div class="decomp-row" data-i="${i}">
+            <input class="decomp-part" value="${escapeHtml(d.part)}" placeholder="Partie">
+            <input class="decomp-meaning" value="${escapeHtml(d.meaning)}" placeholder="Sens">
+            <button class="del" aria-label="Supprimer">×</button>
+          </div>`
+        ).join('');
+      }
+
+      form.innerHTML = `
+        <div class="anki-preview">
+          <div class="form-section">
+            <label class="form-label" for="ankiDe">Recto (allemand)</label>
+            <input class="form-input" id="ankiDeField" type="text" value="${escapeHtml(p.de)}">
+          </div>
+          <div class="form-section">
+            <label class="form-label" for="ankiFr">Verso (français)</label>
+            <input class="form-input" id="ankiFrField" type="text" value="${escapeHtml(p.fr)}">
+          </div>
+          <div class="form-section">
+            <div class="decomp-label">
+              <span class="form-label" style="margin-bottom:0">Décomposition</span>
+            </div>
+            <div id="decompList">${decompHTML}</div>
+            <button class="decomp-add" id="decompAdd">+ Ajouter une décomposition</button>
+          </div>
+        </div>
+        <div class="anki-actions">
+          <button class="primary" id="ankiSave">Ajouter à mes mots</button>
+          <button class="primary secondary-btn" id="ankiCancel">Annuler</button>
+        </div>`;
+
+      // Delete decomposition row
+      form.querySelectorAll('.decomp-row .del').forEach(btn =>
+        btn.addEventListener('click', () => {
+          const row = btn.closest('.decomp-row');
+          row.remove();
+        })
+      );
+
+      // Add decomposition row
+      document.getElementById('decompAdd').addEventListener('click', () => {
+        const list = document.getElementById('decompList');
+        const div = document.createElement('div');
+        div.className = 'decomp-row';
+        div.innerHTML = `
+          <input class="decomp-part" value="" placeholder="Partie">
+          <input class="decomp-meaning" value="" placeholder="Sens">
+          <button class="del" aria-label="Supprimer">×</button>`;
+        div.querySelector('.del').addEventListener('click', () => div.remove());
+        list.appendChild(div);
+      });
+
+      // Save
+      document.getElementById('ankiSave').addEventListener('click', submitAnkiSave);
+
+      // Cancel
+      document.getElementById('ankiCancel').addEventListener('click', () => {
+        ankiPreview = null;
+        renderAddForm();
+      });
+    }
   }
 }
 
@@ -658,13 +760,80 @@ function handleSourceCreated(source) {
   openSource(source.id);
 }
 
+/* ============================ ANKI ENTRY ============================ */
+async function submitAnkiGenerate() {
+  const word = document.getElementById('ankiWord')?.value?.trim();
+  const errBox = document.getElementById('addErr');
+  errBox.innerHTML = '';
+
+  if (!word) {
+    errBox.innerHTML = `<div class="err">Saisis un mot.</div>`;
+    return;
+  }
+
+  const btn = document.getElementById('ankiGenerate');
+  const origText = btn.textContent;
+  btn.disabled = true;
+  btn.innerHTML = `<span class="anki-loading"><span class="spin"></span> Génération…</span>`;
+
+  try {
+    const result = await API.post('/api/anki-entry/generate', {
+      word: word,
+      direction: ankiDirection,
+    });
+    ankiPreview = result;
+    renderAddForm();
+  } catch (err) {
+    errBox.innerHTML = `<div class="err">${escapeHtml(err.message)}</div>`;
+    btn.disabled = false;
+    btn.textContent = origText;
+  }
+}
+
+async function submitAnkiSave() {
+  const de = document.getElementById('ankiDeField')?.value?.trim();
+  const fr = document.getElementById('ankiFrField')?.value?.trim();
+  const errBox = document.getElementById('addErr');
+  errBox.innerHTML = '';
+
+  if (!de || !fr) {
+    errBox.innerHTML = `<div class="err">Les champs recto et verso sont requis.</div>`;
+    return;
+  }
+
+  // Gather decomposition from DOM
+  const decomposition = [];
+  document.querySelectorAll('#decompList .decomp-row').forEach(row => {
+    const part = row.querySelector('.decomp-part')?.value?.trim();
+    const meaning = row.querySelector('.decomp-meaning')?.value?.trim();
+    if (part && meaning) {
+      decomposition.push({ part, meaning });
+    }
+  });
+
+  const saveBtn = document.getElementById('ankiSave');
+  saveBtn.disabled = true;
+
+  try {
+    const saved = await API.post('/api/anki-entry/save', { de, fr, decomposition });
+    savedWords[saved.surface] = { display: saved.display, fr: saved.fr, lemma: saved.lemma || '', note: saved.note || '' };
+    updateCount();
+    toast('Ajouté !');
+    ankiPreview = null;
+    renderAddForm();
+  } catch (err) {
+    errBox.innerHTML = `<div class="err">${escapeHtml(err.message)}</div>`;
+    saveBtn.disabled = false;
+  }
+}
+
 /* ============================ LOAD SAVED WORDS ============================ */
 async function loadSavedWords() {
   try {
     const words = await API.get('/api/words');
     savedWords = {};
     words.forEach(w => {
-      savedWords[w.surface] = { display: w.display, fr: w.fr, lemma: w.lemma || '' };
+      savedWords[w.surface] = { display: w.display, fr: w.fr, lemma: w.lemma || '', note: w.note || '' };
     });
   } catch (e) {
     // Offline or error — use empty

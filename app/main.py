@@ -13,7 +13,7 @@ from pydantic import BaseModel
 
 from app import db
 from app.ingest import extract_from_url, extract_from_pdf, detect_language, validate_text
-from app.llm import generate_glossary
+from app.llm import generate_glossary, generate_anki_entry
 from app.anki import generate_anki_tsv
 
 logging.basicConfig(level=logging.INFO)
@@ -182,6 +182,7 @@ class WordBody(BaseModel):
     fr: str
     lemma: Optional[str] = None
     source_id: Optional[int] = None
+    note: Optional[str] = None
 
 
 # ── Words API ────────────────────────────────────────────────────────────
@@ -199,6 +200,7 @@ def create_word(body: WordBody):
         fr=body.fr,
         lemma=body.lemma,
         source_id=body.source_id,
+        note=body.note,
     )
 
 
@@ -219,6 +221,82 @@ def export_words():
         headers={
             "Content-Disposition": 'attachment; filename="lesewerkstatt_anki.txt"'
         },
+    )
+
+
+# ── Anki Entry Models ────────────────────────────────────────────────────
+
+class AnkiGenerateBody(BaseModel):
+    word: str
+    direction: str  # 'de' or 'fr'
+
+class DecompositionItem(BaseModel):
+    part: str
+    meaning: str
+
+class AnkiSaveBody(BaseModel):
+    de: str
+    fr: str
+    decomposition: list[DecompositionItem] = []
+
+
+# German articles to strip from surface computation
+_ARTICLES = {
+    "der", "die", "das", "den", "dem", "des",
+    "ein", "eine", "einen", "einem", "eines",
+}
+
+
+# ── Anki Entry API ───────────────────────────────────────────────────────
+
+@app.post("/api/anki-entry/generate")
+def anki_generate(body: AnkiGenerateBody):
+    if body.direction not in ("de", "fr"):
+        raise HTTPException(status_code=400, detail="direction doit être 'de' ou 'fr'")
+    word = body.word.strip()
+    if not word:
+        raise HTTPException(status_code=400, detail="Le mot est requis")
+    try:
+        result = generate_anki_entry(word, body.direction)
+        return result
+    except Exception as e:
+        logger.error(f"Anki entry generation failed: {e}")
+        raise HTTPException(
+            status_code=502,
+            detail=f"La génération de l'entrée Anki a échoué : {e}"
+        )
+
+
+@app.post("/api/anki-entry/save", status_code=201)
+def anki_save(body: AnkiSaveBody):
+    de = body.de.strip()
+    fr = body.fr.strip()
+    if not de or not fr:
+        raise HTTPException(status_code=400, detail="Les champs 'de' et 'fr' sont requis")
+
+    # Build note text from decomposition
+    note_lines = []
+    for item in body.decomposition:
+        p = item.part.strip()
+        m = item.meaning.strip()
+        if p and m:
+            note_lines.append(f"- {p} : {m}")
+    note_text = "\n".join(note_lines) if note_lines else None
+
+    # Compute surface: strip leading article, then lowercase
+    parts = de.split(None, 1)
+    if len(parts) == 2 and parts[0].lower() in _ARTICLES:
+        surface = parts[1].lower()
+    else:
+        surface = de.lower()
+
+    return db.upsert_word(
+        surface=surface,
+        display=de,
+        fr=fr,
+        lemma=None,
+        source_id=None,
+        note=note_text,
     )
 
 

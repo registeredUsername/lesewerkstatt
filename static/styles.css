@@ -1060,3 +1060,116 @@ textarea.form-input {
   background: var(--red-wash);
   border-color: transparent;
 }
+
+/* ── Anki entry form ───────────────────────────────────────────────── */
+.anki-preview {
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  margin-top: 0.8rem;
+}
+
+.anki-preview .form-section {
+  margin-top: 0.6rem;
+}
+
+.anki-preview .form-section:first-child {
+  margin-top: 0;
+}
+
+.decomp-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.3rem;
+}
+
+.decomp-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.4rem;
+}
+
+.decomp-row input {
+  flex: 1;
+  border: 1px solid var(--hair-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  padding: 0.45rem 0.6rem;
+  font-family: var(--sans);
+  font-size: 0.84rem;
+  color: var(--ink);
+  transition: border-color var(--transition-fast);
+}
+
+.decomp-row input:focus {
+  outline: 2px solid var(--red);
+  outline-offset: 1px;
+  border-color: transparent;
+}
+
+.decomp-row input:first-child {
+  flex: 0 0 35%;
+}
+
+.decomp-row .del {
+  border: none;
+  background: none;
+  color: var(--slate);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0.2rem 0.3rem;
+  flex: 0 0 auto;
+  transition: color var(--transition-fast);
+}
+
+.decomp-row .del:hover {
+  color: var(--red);
+}
+
+.decomp-add {
+  border: 1px dashed var(--hair-strong);
+  background: none;
+  color: var(--slate);
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.4rem 0.6rem;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), color var(--transition-fast);
+  margin-top: 0.1rem;
+}
+
+.decomp-add:hover {
+  border-color: var(--red);
+  color: var(--ink-soft);
+}
+
+.anki-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+
+.anki-actions button {
+  flex: 1;
+}
+
+.anki-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.anki-loading .spin {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+}
+
+.anki-direction {
+  margin-bottom: 0.6rem;
+}

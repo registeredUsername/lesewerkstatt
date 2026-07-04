@@ -35,13 +35,43 @@ TRANSLATE_PROMPT = (
     "et le sens original du texte. Réponds UNIQUEMENT avec la traduction en allemand, sans aucun autre commentaire."
 )
 
+ANKI_ENTRY_PROMPT_DE = (
+    "Tu aides un francophone à créer une fiche Anki pour un mot ALLEMAND.\n"
+    "L'utilisateur te donne un mot allemand (possiblement fléchi). Tu dois renvoyer :\n"
+    "1. \"de\" : la forme de citation / dictionnaire. Pour un nom → avec article (der/die/das). "
+    "Pour un verbe → infinitif. Pour un adjectif → forme de base.\n"
+    "2. \"fr\" : traduction française concise (plusieurs sens séparés par ' ou ' si pertinent).\n"
+    "3. \"decomposition\" : UNIQUEMENT si le mot est un composé (Zusammensetzung), un verbe à "
+    "préfixe séparable/inséparable, ou a une structure morphologique intéressante. "
+    "Chaque élément : {\"part\": \"morceau\", \"meaning\": \"sens du morceau en français\"}. "
+    "Liste VIDE si le mot est simple.\n\n"
+    "Réponds UNIQUEMENT par un objet JSON, sans texte autour, sans balises markdown :\n"
+    '{"de": "...", "fr": "...", "decomposition": [...]}'
+)
+
+ANKI_ENTRY_PROMPT_FR = (
+    "Tu aides un francophone à créer une fiche Anki pour un mot FRANÇAIS qu'il veut apprendre en allemand.\n"
+    "L'utilisateur te donne un mot français. Tu dois :\n"
+    "1. Trouver l'équivalent allemand courant. Pour un nom → avec article (der/die/das). "
+    "Pour un verbe → infinitif. Pour un adjectif → forme de base.\n"
+    "2. \"fr\" : la traduction française à mettre au verso (proche du mot donné, "
+    "éventuellement légèrement clarifiée si ambigu).\n"
+    "3. \"decomposition\" : décomposition morphologique du mot ALLEMAND trouvé, "
+    "UNIQUEMENT si pertinent (composé, verbe à préfixe, etc.). Liste VIDE sinon.\n\n"
+    "Réponds UNIQUEMENT par un objet JSON, sans texte autour, sans balises markdown :\n"
+    '{"de": "...", "fr": "...", "decomposition": [...]}'
+)
+
 _MAX_RETRIES = 3
 _BACKOFF_SECS = [1, 2, 4]
 
 
-def call_llm(chunk: str) -> list[dict]:
+def _call_llm_raw(
+    system_prompt: str, user_content: str,
+    temperature: float = 0.2, max_tokens: int = 1500, timeout: int = 90,
+) -> str:
     """
-    Send a single text chunk to the LLM. Returns parsed glossary entries.
+    Shared HTTP call with retry/backoff. Returns raw content string.
     Raises on unrecoverable errors.
     """
     if not LLM_BASE_URL or not LLM_API_KEY:
@@ -54,19 +84,19 @@ def call_llm(chunk: str) -> list[dict]:
     }
     payload = {
         "model": LLM_MODEL,
-        "temperature": 0.2,
-        "max_tokens": 1500,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
         "stream": False,
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": "--- TEXTE ---\n" + chunk},
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content},
         ],
     }
 
     last_err = None
     for attempt in range(_MAX_RETRIES):
         try:
-            resp = httpx.post(url, json=payload, headers=headers, timeout=90)
+            resp = httpx.post(url, json=payload, headers=headers, timeout=timeout)
             if resp.status_code == 429:
                 wait = _BACKOFF_SECS[min(attempt, len(_BACKOFF_SECS) - 1)]
                 logger.warning(f"Rate limited (429), retrying in {wait}s (attempt {attempt + 1})")
@@ -74,8 +104,7 @@ def call_llm(chunk: str) -> list[dict]:
                 continue
             resp.raise_for_status()
             data = resp.json()
-            raw = data["choices"][0]["message"]["content"]
-            return _parse_gloss(raw)
+            return data["choices"][0]["message"]["content"]
         except httpx.HTTPStatusError as e:
             last_err = e
             if e.response.status_code == 429:
@@ -94,6 +123,15 @@ def call_llm(chunk: str) -> list[dict]:
                 raise
 
     raise RuntimeError(f"LLM call failed after {_MAX_RETRIES} retries: {last_err}")
+
+
+def call_llm(chunk: str) -> list[dict]:
+    """
+    Send a single text chunk to the LLM. Returns parsed glossary entries.
+    Raises on unrecoverable errors.
+    """
+    raw = _call_llm_raw(SYSTEM_PROMPT, "--- TEXTE ---\n" + chunk, temperature=0.2, max_tokens=1500, timeout=90)
+    return _parse_gloss(raw)
 
 
 def _parse_gloss(raw: str) -> list[dict]:
@@ -186,55 +224,8 @@ def call_translation_llm(chunk: str) -> str:
     """
     Send a text chunk to the LLM for translation to German.
     """
-    if not LLM_BASE_URL or not LLM_API_KEY:
-        raise RuntimeError("LLM_BASE_URL and LLM_API_KEY must be set")
-
-    url = f"{LLM_BASE_URL.rstrip('/')}/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {LLM_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "model": LLM_MODEL,
-        "temperature": 0.3,  # slightly higher for translation flow
-        "max_tokens": 3000,
-        "stream": False,
-        "messages": [
-            {"role": "system", "content": TRANSLATE_PROMPT},
-            {"role": "user", "content": chunk},
-        ],
-    }
-
-    last_err = None
-    for attempt in range(_MAX_RETRIES):
-        try:
-            resp = httpx.post(url, json=payload, headers=headers, timeout=120)
-            if resp.status_code == 429:
-                wait = _BACKOFF_SECS[min(attempt, len(_BACKOFF_SECS) - 1)]
-                logger.warning(f"Rate limited (429), retrying in {wait}s (attempt {attempt + 1})")
-                time.sleep(wait)
-                continue
-            resp.raise_for_status()
-            data = resp.json()
-            return data["choices"][0]["message"]["content"].strip()
-        except httpx.HTTPStatusError as e:
-            last_err = e
-            if e.response.status_code == 429:
-                wait = _BACKOFF_SECS[min(attempt, len(_BACKOFF_SECS) - 1)]
-                logger.warning(f"Rate limited (429), retrying in {wait}s (attempt {attempt + 1})")
-                time.sleep(wait)
-                continue
-            raise
-        except Exception as e:
-            last_err = e
-            if attempt < _MAX_RETRIES - 1:
-                wait = _BACKOFF_SECS[min(attempt, len(_BACKOFF_SECS) - 1)]
-                logger.warning(f"LLM translation failed ({e}), retrying in {wait}s")
-                time.sleep(wait)
-            else:
-                raise
-
-    raise RuntimeError(f"LLM translation failed after {_MAX_RETRIES} retries: {last_err}")
+    raw = _call_llm_raw(TRANSLATE_PROMPT, chunk, temperature=0.3, max_tokens=3000, timeout=120)
+    return raw.strip()
 
 
 def translate_to_german(text: str) -> str:
@@ -256,3 +247,65 @@ def translate_to_german(text: str) -> str:
             time.sleep(0.5)
 
     return "\n\n".join(translated_chunks)
+
+
+# ── Anki entry generation ────────────────────────────────────────────────
+
+def _parse_anki_entry(raw: str) -> dict:
+    """
+    Tolerant JSON parsing for anki entry: strip markdown fences,
+    find the JSON object, validate fields.
+    """
+    if not raw:
+        raise RuntimeError("Empty LLM response")
+
+    s = raw.replace("```json", "").replace("```", "").strip()
+
+    # Find the JSON object
+    idx = s.find("{")
+    if idx >= 0:
+        s = s[idx:]
+
+    # Try direct parse
+    obj = None
+    try:
+        obj = json.loads(s)
+    except json.JSONDecodeError:
+        # Truncated: cut to last closing brace
+        last_brace = s.rfind("}")
+        if last_brace > 0:
+            try:
+                obj = json.loads(s[: last_brace + 1])
+            except json.JSONDecodeError:
+                pass
+
+    if not isinstance(obj, dict):
+        raise RuntimeError(f"Could not parse LLM response as JSON object: {raw[:200]}")
+
+    de = (obj.get("de") or "").strip()
+    fr = (obj.get("fr") or "").strip()
+    if not de or not fr:
+        raise RuntimeError(f"LLM response missing 'de' or 'fr' fields: {raw[:200]}")
+
+    decomposition = []
+    for item in (obj.get("decomposition") or []):
+        if isinstance(item, dict):
+            part = (item.get("part") or "").strip()
+            meaning = (item.get("meaning") or "").strip()
+            if part and meaning:
+                decomposition.append({"part": part, "meaning": meaning})
+
+    return {"de": de, "fr": fr, "decomposition": decomposition}
+
+
+def generate_anki_entry(word: str, direction: str) -> dict:
+    """
+    Generate an Anki entry for a word. direction = 'de' or 'fr'.
+    Returns {"de": str, "fr": str, "decomposition": [{"part": str, "meaning": str}]}.
+    """
+    if direction not in ("de", "fr"):
+        raise ValueError(f"direction must be 'de' or 'fr', got '{direction}'")
+
+    prompt = ANKI_ENTRY_PROMPT_DE if direction == "de" else ANKI_ENTRY_PROMPT_FR
+    raw = _call_llm_raw(prompt, word, temperature=0.2, max_tokens=800, timeout=60)
+    return _parse_anki_entry(raw)

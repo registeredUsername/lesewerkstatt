@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS saved_words (
   fr         TEXT NOT NULL,
   lemma      TEXT,
   source_id  INTEGER,
+  note       TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 """
@@ -51,6 +52,11 @@ def get_db() -> sqlite3.Connection:
 def init_db():
     conn = get_db()
     conn.executescript(_SCHEMA)
+    # Lightweight migration: add 'note' column if missing (existing DBs)
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(saved_words)").fetchall()}
+    if "note" not in cols:
+        conn.execute("ALTER TABLE saved_words ADD COLUMN note TEXT")
+        conn.commit()
     conn.close()
 
 
@@ -115,7 +121,7 @@ def delete_source(source_id: int) -> bool:
 def list_words() -> list[dict]:
     conn = get_db()
     rows = conn.execute(
-        "SELECT surface, display, fr, lemma, source_id, created_at "
+        "SELECT surface, display, fr, lemma, source_id, note, created_at "
         "FROM saved_words ORDER BY created_at DESC"
     ).fetchall()
     conn.close()
@@ -123,15 +129,16 @@ def list_words() -> list[dict]:
 
 
 def upsert_word(
-    surface: str, display: str, fr: str, lemma: str | None = None, source_id: int | None = None
+    surface: str, display: str, fr: str, lemma: str | None = None,
+    source_id: int | None = None, note: str | None = None
 ) -> dict:
     conn = get_db()
     conn.execute(
-        "INSERT INTO saved_words (surface, display, fr, lemma, source_id) "
-        "VALUES (?, ?, ?, ?, ?) "
+        "INSERT INTO saved_words (surface, display, fr, lemma, source_id, note) "
+        "VALUES (?, ?, ?, ?, ?, ?) "
         "ON CONFLICT(surface) DO UPDATE SET display=excluded.display, fr=excluded.fr, "
-        "lemma=excluded.lemma, source_id=excluded.source_id",
-        (surface.lower(), display, fr, lemma, source_id),
+        "lemma=excluded.lemma, source_id=excluded.source_id, note=excluded.note",
+        (surface.lower(), display, fr, lemma, source_id, note),
     )
     conn.commit()
     row = conn.execute("SELECT * FROM saved_words WHERE surface = ?", (surface.lower(),)).fetchone()
