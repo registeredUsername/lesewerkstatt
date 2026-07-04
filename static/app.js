@@ -309,8 +309,18 @@ function closeSheet() {
 
 backdrop.addEventListener('click', closeSheet);
 
+function decompositionToNote(decomposition) {
+  const lines = (decomposition || [])
+    .map(d => (d.part || '').trim() && (d.meaning || '').trim()
+      ? `- ${d.part.trim()} : ${d.meaning.trim()}`
+      : null)
+    .filter(Boolean);
+  return lines.length ? lines.join('\n') : null;
+}
+
 async function toggleSave(surf, e) {
   const sl = surf.toLowerCase();
+  const btn = document.getElementById('keepBtn');
   try {
     if (savedWords[sl]) {
       await API.del(`/api/words/${encodeURIComponent(sl)}`);
@@ -318,15 +328,39 @@ async function toggleSave(surf, e) {
       if (sheetWordEl) sheetWordEl.classList.remove('saved');
       toast('Retiré');
     } else {
+      // Show loading state on the button
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = 'Génération…';
+      }
+
+      let display = surf;
+      let fr = e.fr;
+      let note = e.note || null;
+
+      try {
+        // Call LLM for high-quality entry (same as Entrée Anki)
+        const result = await API.post('/api/anki-entry/generate', {
+          word: e.lemma || surf,
+          direction: 'de',
+        });
+        display = result.de;
+        fr = result.fr;
+        note = decompositionToNote(result.decomposition);
+      } catch (llmErr) {
+        // Fallback: use raw glossary data
+        toast('Ajouté (mode simplifié — IA indisponible)');
+      }
+
       await API.post('/api/words', {
         surface: sl,
-        display: surf,
-        fr: e.fr,
+        display: display,
+        fr: fr,
         lemma: e.lemma || null,
         source_id: currentSourceId,
-        note: e.note || null,
+        note: note,
       });
-      savedWords[sl] = { display: surf, fr: e.fr, lemma: e.lemma || '' };
+      savedWords[sl] = { display: display, fr: fr, lemma: e.lemma || '', note: note || '' };
       if (sheetWordEl) sheetWordEl.classList.add('saved');
       toast('Gardé pour Anki');
     }
@@ -334,8 +368,8 @@ async function toggleSave(surf, e) {
     toast('Erreur : ' + err.message);
   }
   updateCount();
-  const btn = document.getElementById('keepBtn');
   if (btn) {
+    btn.disabled = false;
     const on = !!savedWords[sl];
     btn.classList.toggle('is-saved', on);
     btn.textContent = on ? '✓ Gardé' : '+ Garder';
